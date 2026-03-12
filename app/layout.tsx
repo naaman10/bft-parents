@@ -1,10 +1,28 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+
 export const metadata: Metadata = {
   title: "Brighter Futures Tutoring — New Starter Form",
   description:
     "Onboard your child for private tutoring with Brighter Futures Tutoring.",
+  metadataBase: siteUrl ? new URL(siteUrl) : undefined,
+  openGraph: {
+    title: "Brighter Futures Tutoring — New Starter Form",
+    description:
+      "Onboard your child for private tutoring with Brighter Futures Tutoring.",
+    images: ["/share-image.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Brighter Futures Tutoring — New Starter Form",
+    description:
+      "Onboard your child for private tutoring with Brighter Futures Tutoring.",
+    images: ["/share-image.png"],
+  },
 };
 
 export const viewport: Viewport = {
