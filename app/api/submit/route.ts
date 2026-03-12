@@ -175,6 +175,17 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("Submit error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    const isDuplicateEmail = message.includes("parents_email_key");
+    if (isDuplicateEmail) {
+      return NextResponse.json(
+        {
+          error:
+            "An account with this email address has already been registered. Please use a different email or contact us if you need help.",
+        },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: "Failed to save your details. Please try again." },
       { status: 500 }
