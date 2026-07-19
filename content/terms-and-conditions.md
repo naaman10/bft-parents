@@ -2,6 +2,7 @@
 # Terms and Conditions
 
 **Brighter Futures Tutoring**
+Version 1.2
 
 ### 1. Fees
 1. Tuition fees are charged at £32 per session.

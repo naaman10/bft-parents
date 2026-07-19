@@ -37,6 +37,8 @@ export const parents = pgTable("parents", {
   emergencyContact: text("emergency_contact"),
   terms: timestamp("terms", { withTimezone: true }),
   acknowledgement: timestamp("acknowledgement", { withTimezone: true }),
+  /** Snapshot of terms markdown at the time of agreement */
+  termsText: text("terms_text"),
 });
 
 /** Matches existing production table "students" + new columns (new columns nullable for safe migration). */

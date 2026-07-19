@@ -1,3 +1,5 @@
+import { readFile } from "fs/promises";
+import path from "path";
 import sgMail from "@sendgrid/mail";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -23,6 +25,7 @@ const SENDGRID_TEMPLATE_ID = "d-6817f876ad7145f6bf4b7368693b26ab";
  *   addressLine1, addressLine2, town, postCode → address_line_1, address_line_2, town, post_code
  *   emergencyContact* (step 3) → emergency_first_name, emergency_last_name, emergency_relation, emergency_contact
  *   termsAgreed, infoAccurateAgreed (step 6) → terms, acknowledgement (timestamps)
+ *   content/terms-and-conditions.md (server-read at submit) → terms_text
  *
  * STUDENTS table:
  *   childFirstName, childLastName, dateOfBirth → first_name, last_name, dob
@@ -94,6 +97,20 @@ export async function POST(request: Request) {
 
     const agreedAt = new Date();
 
+    let termsText: string;
+    try {
+      termsText = await readFile(
+        path.join(process.cwd(), "content/terms-and-conditions.md"),
+        "utf-8"
+      );
+    } catch (readErr) {
+      console.error("Failed to read terms-and-conditions.md:", readErr);
+      return NextResponse.json(
+        { error: "Failed to save your details. Please try again." },
+        { status: 500 }
+      );
+    }
+
     // Step 1: Create parent first. .returning() returns the inserted row(s) so we get the new parent's id.
     const [parent] = await db
       .insert(parents)
@@ -114,6 +131,7 @@ export async function POST(request: Request) {
         emergencyContact: e.emergencyContactNumber.trim(),
         terms: agreedAt,
         acknowledgement: agreedAt,
+        termsText,
       })
       .returning();
 

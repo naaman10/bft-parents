@@ -27,10 +27,12 @@ Starter sign-up form for parents onboarding their child to private tutoring. On 
 
 3. **Run migrations**
 
-   If your database already has the `parents` table (e.g. production), add the new columns with:
+   If your database already has the `parents` / `students` tables (e.g. production), add the new columns with:
 
    ```bash
    psql "$DATABASE_URL" -f drizzle/0001_add_parent_new_columns.sql
+   psql "$DATABASE_URL" -f drizzle/0002_add_students_new_columns.sql
+   psql "$DATABASE_URL" -f drizzle/0003_add_parents_terms_text.sql
    ```
 
    Otherwise use Drizzle to generate/apply from schema:
@@ -89,12 +91,12 @@ Optional: you can connect [Neon’s Vercel integration](https://neon.tech/docs/g
 
 ## Database schema (current)
 
-**parents** (existing table; new columns added via `drizzle/0001_add_parent_new_columns.sql`):
+**parents** (existing table; new columns via `drizzle/0001_add_parent_new_columns.sql` and `drizzle/0003_add_parents_terms_text.sql`):
 
 - Existing: `id`, `first_name`, `last_name`, `email` (unique), `contact_number`, `created_at`, `updated_at`, `session_rate`
-- New (all nullable): `relationship`, `secondary_contact_number`, `address_line_1`, `address_line_2`, `town`, `post_code`, `emergency_first_name`, `emergency_last_name`, `emergency_relation`, `emergency_contact`, `terms`, `acknowledgement`
+- New (all nullable): `relationship`, `secondary_contact_number`, `address_line_1`, `address_line_2`, `town`, `post_code`, `emergency_first_name`, `emergency_last_name`, `emergency_relation`, `emergency_contact`, `terms`, `acknowledgement`, `terms_text`
 
-Form → parent mapping: primary contact → `contact_number`; relationship to child → `relationship`; emergency contact fields → `emergency_*`; terms/acknowledgement checkboxes → `terms` / `acknowledgement` (timestamps).
+Form → parent mapping: primary contact → `contact_number`; relationship to child → `relationship`; emergency contact fields → `emergency_*`; terms/acknowledgement checkboxes → `terms` / `acknowledgement` (timestamps); server snapshot of `content/terms-and-conditions.md` at submit → `terms_text`.
 
 - **children**: `id`, `parent_id`, `first_name`, `last_name`, `date_of_birth`, `current_school`, `current_year_group`, plus optional SEN, exam board, medical/medication, collection/leave fields.
 
