@@ -1,6 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
-import sgMail from "@sendgrid/mail";
+import { Resend } from "resend";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { parents, students } from "@/lib/schema";
@@ -13,7 +13,7 @@ import {
   agreementsSchema,
 } from "@/lib/validations";
 
-const SENDGRID_TEMPLATE_ID = "d-6817f876ad7145f6bf4b7368693b26ab";
+const RESEND_TEMPLATE_ID = "new-starter";
 
 /**
  * Form → database mapping (validation key → table.column)
@@ -167,22 +167,23 @@ export async function POST(request: Request) {
       leaveIndependantly,
     });
 
-    // Send confirmation email to parent via SendGrid template
-    const apiKey = process.env.SENDGRID_API_KEY;
-    const fromEmail = process.env.SENDGRID_FROM_EMAIL;
+    // Send confirmation email to parent via Resend template
+    const apiKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.RESEND_FROM_EMAIL;
     if (apiKey && fromEmail) {
-      sgMail.setApiKey(apiKey);
+      const resend = new Resend(apiKey);
       try {
-        await sgMail.send({
-          to: parent.email,
+        await resend.emails.send({
           from: fromEmail,
-          templateId: SENDGRID_TEMPLATE_ID,
-          dynamicTemplateData: {
+          to: parent.email,
+          subject: "Welcome to Brighter Futures Tutoring",
+          template: RESEND_TEMPLATE_ID,
+          template_data: {
             parent_name: parent.firstName,
           },
-        });
+        } as any);
       } catch (emailErr) {
-        console.error("SendGrid confirmation email failed:", emailErr);
+        console.error("Resend confirmation email failed:", emailErr);
         // Still return success so the sign-up is not lost; email is best-effort
       }
     }

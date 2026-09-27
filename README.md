@@ -22,8 +22,8 @@ Starter sign-up form for parents onboarding their child to private tutoring. On 
    - Create a project and database at [Neon](https://console.neon.tech).
    - Copy `.env.example` to `.env` and set:
      - `DATABASE_URL` — Neon connection string
-     - `SENDGRID_API_KEY` — for confirmation emails (from [SendGrid](https://sendgrid.com))
-     - `SENDGRID_FROM_EMAIL` — verified sender address (e.g. `noreply@yourdomain.com`)
+     - `RESEND_API_KEY` — for confirmation emails (from [Resend](https://resend.com))
+     - `RESEND_FROM_EMAIL` — verified sender address (e.g. `noreply@yourdomain.com`)
 
 3. **Run migrations**
 
@@ -60,7 +60,7 @@ The app is set up for [Vercel](https://vercel.com). The Neon serverless driver a
 
 3. **Set environment variables** in the project’s **Settings → Environment Variables**:
    - `DATABASE_URL` — your Neon connection string (add for Production, Preview, and Development if you use Vercel previews).
-   - `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL` — for sending the sign-up confirmation email.
+   - `RESEND_API_KEY` and `RESEND_FROM_EMAIL` — for sending the sign-up confirmation email.
 
 4. **Run migrations** before or after the first deploy:
    - Either run `npm run db:migrate` locally with the same `DATABASE_URL` you added on Vercel.
