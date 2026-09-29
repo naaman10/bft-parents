@@ -1,5 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
+import { and, eq, sql } from "drizzle-orm";
 import { Resend } from "resend";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -14,6 +15,57 @@ import {
 } from "@/lib/validations";
 
 const RESEND_TEMPLATE_ID = "new-starter";
+
+const DUPLICATE_STUDENT_MESSAGE =
+  "This student is already registered with this email address. You can submit the form again to add a different child.";
+
+function errorText(err: unknown): string {
+  if (err instanceof Error) {
+    const cause = err.cause ? errorText(err.cause) : "";
+    return `${err.message} ${cause}`;
+  }
+  return String(err);
+}
+
+function isDuplicateEmailError(err: unknown) {
+  return errorText(err).includes("parents_email_key");
+}
+
+/** Match an existing parent by email, ignoring case and surrounding spaces. */
+async function findParentByEmail(email: string) {
+  const [parent] = await db
+    .select()
+    .from(parents)
+    .where(sql`lower(btrim(${parents.email})) = ${email}`)
+    .limit(1);
+  return parent;
+}
+
+/**
+ * A student already belongs to this parent when first name, last name, and
+ * date of birth match. A different child, including one who shares a name
+ * but has a different date of birth, can still be registered.
+ */
+async function findStudentForParent(
+  parentId: string,
+  firstName: string,
+  lastName: string,
+  dateOfBirth: string
+) {
+  const [student] = await db
+    .select({ id: students.id })
+    .from(students)
+    .where(
+      and(
+        eq(students.parentId, parentId),
+        sql`lower(btrim(${students.firstName})) = ${firstName.toLowerCase()}`,
+        sql`lower(btrim(${students.lastName})) = ${lastName.toLowerCase()}`,
+        eq(students.dob, dateOfBirth)
+      )
+    )
+    .limit(1);
+  return student;
+}
 
 /**
  * Form → database mapping (validation key → table.column)
@@ -111,29 +163,52 @@ export async function POST(request: Request) {
       );
     }
 
-    // Step 1: Create parent first. .returning() returns the inserted row(s) so we get the new parent's id.
-    const [parent] = await db
-      .insert(parents)
-      .values({
-        firstName: p.firstName.trim(),
-        lastName: p.lastName.trim(),
-        email: p.email.trim().toLowerCase(),
-        contactNumber: p.primaryContactNumber.trim(),
-        relationship: p.relationshipToChild,
-        secondaryContactNumber: p.secondaryContactNumber?.trim() || null,
-        addressLine1: p.addressLine1.trim(),
-        addressLine2: p.addressLine2?.trim() || null,
-        town: p.town.trim(),
-        postCode: p.postCode.trim(),
-        emergencyFirstName: e.emergencyContactFirstName.trim(),
-        emergencyLastName: e.emergencyContactLastName.trim(),
-        emergencyRelation: e.emergencyContactRelationship.trim(),
-        emergencyContact: e.emergencyContactNumber.trim(),
-        terms: agreedAt,
-        acknowledgement: agreedAt,
-        termsText,
-      })
-      .returning();
+    const email = p.email.trim().toLowerCase();
+    const childFirstName = s.childFirstName.trim();
+    const childLastName = s.childLastName.trim();
+    const dateOfBirth = s.dateOfBirth.trim();
+
+    const parentDetails = {
+      firstName: p.firstName.trim(),
+      lastName: p.lastName.trim(),
+      contactNumber: p.primaryContactNumber.trim(),
+      relationship: p.relationshipToChild,
+      secondaryContactNumber: p.secondaryContactNumber?.trim() || null,
+      addressLine1: p.addressLine1.trim(),
+      addressLine2: p.addressLine2?.trim() || null,
+      town: p.town.trim(),
+      postCode: p.postCode.trim(),
+      emergencyFirstName: e.emergencyContactFirstName.trim(),
+      emergencyLastName: e.emergencyContactLastName.trim(),
+      emergencyRelation: e.emergencyContactRelationship.trim(),
+      emergencyContact: e.emergencyContactNumber.trim(),
+      terms: agreedAt,
+      acknowledgement: agreedAt,
+      termsText,
+      updatedAt: agreedAt,
+    };
+
+    // Reuse the parent when this email has already signed up, so another child
+    // can be added. Email stays unique; students are added under that parent.
+    let parent = await findParentByEmail(email);
+    let createdNewParent = false;
+
+    if (!parent) {
+      try {
+        const [created] = await db
+          .insert(parents)
+          .values({
+            email,
+            ...parentDetails,
+          })
+          .returning();
+        parent = created;
+        createdNewParent = Boolean(created);
+      } catch (insertErr) {
+        if (!isDuplicateEmailError(insertErr)) throw insertErr;
+        parent = await findParentByEmail(email);
+      }
+    }
 
     if (!parent) {
       return NextResponse.json(
@@ -142,7 +217,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Step 2: Create student linked to the new parent using parent.id from step 1.
+    if (!createdNewParent) {
+      const existingStudent = await findStudentForParent(
+        parent.id,
+        childFirstName,
+        childLastName,
+        dateOfBirth
+      );
+      if (existingStudent) {
+        return NextResponse.json({ error: DUPLICATE_STUDENT_MESSAGE }, { status: 409 });
+      }
+
+      const [updated] = await db
+        .update(parents)
+        .set(parentDetails)
+        .where(eq(parents.id, parent.id))
+        .returning();
+      if (updated) parent = updated;
+    }
+
     const leaveIndependantly =
       c.allowedToLeaveIndependently === "yes"
         ? true
@@ -152,9 +245,9 @@ export async function POST(request: Request) {
 
     await db.insert(students).values({
       parentId: parent.id,
-      firstName: s.childFirstName.trim(),
-      lastName: s.childLastName.trim(),
-      dob: s.dateOfBirth.trim() || null,
+      firstName: childFirstName,
+      lastName: childLastName,
+      dob: dateOfBirth,
       currentSchool: s.currentSchool.trim() || null,
       currentYearGroup: s.currentYearGroup.trim() || null,
       senNeeds: s.senAdditionalNeeds?.trim() || null,
@@ -194,17 +287,6 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("Submit error:", err);
-    const message = err instanceof Error ? err.message : String(err);
-    const isDuplicateEmail = message.includes("parents_email_key");
-    if (isDuplicateEmail) {
-      return NextResponse.json(
-        {
-          error:
-            "An account with this email address has already been registered. Please use a different email or contact us if you need help.",
-        },
-        { status: 409 }
-      );
-    }
     return NextResponse.json(
       { error: "Failed to save your details. Please try again." },
       { status: 500 }
